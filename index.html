@@ -1,20 +1,242 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SARA v7.0 • RRHH & Nómina (GMSP / Keralty)</title>
+  <title>SARA 6 • Panel de Usuarios (Capa 3)</title>
   <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #131b2e;
+      --border: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; }
-    #root { width: 100%; height: 100%; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 32px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 600; color: var(--text); }
+    .subtitle { font-size: 0.875rem; color: var(--text-muted); margin-top: 4px; }
+
+    .btn {
+      background-color: var(--accent);
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background-color: var(--accent-hover); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+
+    th {
+      background-color: rgba(30, 41, 59, 0.5);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-role { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+
+    .status-box {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: none;
+      font-size: 0.875rem;
+    }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script src="/RRHH/bundle.js?v=keralty_softui_2026"></script>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Gestión de Usuarios</h1>
+        <p class="subtitle">Conectado a SARA6_DEV vía IIS Micro-Backend</p>
+      </div>
+      <button class="btn" onclick="cargarUsuarios()">Actualizar Datos</button>
+    </header>
+
+    <div id="error-message" class="error-box"></div>
+
+    <div class="card">
+      <div id="loading" class="status-box">
+        <div class="spinner"></div>
+        <p>Consultando API de usuarios...</p>
+      </div>
+
+      <div id="table-container" style="display: none;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Usuario</th>
+              <th>Nombre Completo</th>
+              <th>Rol</th>
+              <th>Cargo</th>
+              <th>Unidad</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+
+      <div id="empty" class="status-box" style="display: none;">
+        No hay usuarios registrados en dbo.sys_users.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function cargarUsuarios() {
+      const loading = document.getElementById('loading');
+      const tableContainer = document.getElementById('table-container');
+      const empty = document.getElementById('empty');
+      const errorBox = document.getElementById('error-message');
+      const tbody = document.getElementById('users-body');
+
+      loading.style.display = 'block';
+      tableContainer.style.display = 'none';
+      empty.style.display = 'none';
+      errorBox.style.display = 'none';
+      tbody.innerHTML = '';
+
+      // Time-out de seguridad: máximo 8 segundos para evitar bloqueos
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      // Rutas con fallback
+      const rutas = ['/RRHH/api/usuarios', '/api/usuarios'];
+      let data = null;
+
+      for (const ruta of rutas) {
+        try {
+          const res = await fetch(ruta, { signal: controller.signal });
+          if (res.ok) {
+            data = await res.json();
+            break;
+          }
+        } catch (e) {
+          if (e.name === 'AbortError') {
+            throw new Error('Tiempo de espera agotado (Timeout de 8s). El backend no respondió a tiempo.');
+          }
+        }
+      }
+
+      clearTimeout(timeoutId);
+      loading.style.display = 'none';
+
+      if (!data || !data.ok) {
+        errorBox.textContent = 'Error: No fue posible conectar con los endpoints del backend (/RRHH/api/usuarios).';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const usuarios = data.datos || [];
+      if (usuarios.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+
+      usuarios.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="color: var(--text-muted); font-family: monospace;">#${u.id}</td>
+          <td style="font-weight: 600;">${u.usuario}</td>
+          <td>${u.nombre}</td>
+          <td><span class="badge badge-role">${u.rol}</span></td>
+          <td style="color: var(--text-muted);">${u.cargo_planta || '-'}</td>
+          <td style="color: var(--text-muted);">${u.unidad_planta || '-'}</td>
+          <td><span class="badge badge-success">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tableContainer.style.display = 'block';
+    }
+
+    // Carga automática inicial
+    document.addEventListener('DOMContentLoaded', cargarUsuarios);
+  </script>
 </body>
 </html>

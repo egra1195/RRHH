@@ -154,5 +154,7 @@
     document.getElementById('phvSearchParam')?.addEventListener('input', renderParametros);
   }
 
-  window.SARA_MOD_PHV = { init: initPHV };
+  window.SARA_MODULES = window.SARA_MODULES || {};
+  window.SARA_MODULES['phv'] = { init: initPHV };
+  window.SARA_MOD_PHV = window.SARA_MODULES['phv'];
 })();

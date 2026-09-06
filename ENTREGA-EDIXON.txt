@@ -1,0 +1,530 @@
+================================================================================
+CONTINUACION DEL DESARROLLO — SISTEMA DE RRHH Y NOMINA (GMSP)
+Documento de traspaso para: Edixon Rodriguez
+================================================================================
+
+Este archivo es el prompt inicial. Pegalo completo al empezar la sesion en
+Antigravity. Todo lo que dice fue verificado contra la base de datos y contra el
+servidor, no reconstruido de memoria.
+
+
+================================================================================
+1. QUE ES ESTE PROYECTO
+================================================================================
+
+Grupo Medico Santa Paula (GMSP) tenia un sistema de escritorio llamado SARA v7.0
+para recursos humanos y nomina, sobre Oracle. El trabajo tiene dos fases:
+
+  FASE 1 — Migracion de la base de datos.  TERMINADA.
+    Oracle 11.2.0.1 -> SQL Server 2019.
+    568 tablas, 11.390.468 filas, 534 claves primarias, 759 claves foraneas.
+    Todo reconciliado por conteo de filas. Cero conflictos de integridad
+    referencial al recrear las FK, lo que prueba que los datos llegaron
+    coherentes.
+
+  FASE 2 — Reconstruccion de la aplicacion.  EN CURSO. Es tu trabajo.
+    Aplicacion web que reemplaza al ejecutable viejo.
+
+REGLAS QUE PUSO EL CLIENTE Y QUE NO SE NEGOCIAN:
+
+  a) NO puede ser PHP. Debe usar la misma tecnologia que
+     http://10.16.194.224/Ficha_Medicos/  (Node + React servido por IIS).
+     El cliente fue explicito: "Es importante, no quiero que sea php".
+
+  b) Mismas restricciones de seguridad que
+     http://10.16.194.224/Reportes/Talento_Humano/Control_Pagos_Nomina/
+     Control_Pagos_Nomina.php
+     porque es el mismo acceso que maneja el Coordinador de Nomina.
+
+  c) Se ejecuta desde \\10.16.194.224\c$\inetpub\wwwroot\RRHH
+     NO desarrolles solo en local. El cliente ya reclamo una vez por eso.
+     Cada avance se despliega y se verifica en el servidor.
+
+  d) Debe tener MAS funciones que el sistema original, replicar sus iconos y
+     verse mas profesional.
+
+
+================================================================================
+2. DONDE ESTA TODO
+================================================================================
+
+  C:\Users\larriojas\rrhh-app\          Codigo de la aplicacion
+  C:\Users\larriojas\rrhh-app\pantallas\Pantallas\   35 capturas (.xlsx)
+  C:\Users\larriojas\rrhh-migracion\    Guiones de migracion y utilidades SQL
+  \\10.16.194.224\c$\inetpub\wwwroot\RRHH\   Destino de produccion
+  http://10.16.194.224/RRHH/            La aplicacion en marcha
+
+Base de datos:  SQL Server 10.16.194.224,1433 — base SARA6
+Base de acceso: 10.16.194.203 — base GSSPRO_CMDSP (usuarios y menus, compartida
+                con otras aplicaciones; SOLO LECTURA, no la modifiques)
+
+CREDENCIALES: no estan en este archivo a proposito. Estan en
+  C:\Users\larriojas\rrhh-app\.env                (desarrollo)
+  \\10.16.194.224\c$\inetpub\wwwroot\RRHH\web.config  (produccion)
+Pideselas al responsable del proyecto. No las pegues en chats ni en commits.
+
+
+================================================================================
+3. ESTADO ACTUAL — CIFRAS EXACTAS
+================================================================================
+
+  Modulos con pantalla funcionando ....... 15 de 27
+  Pantallas con tabla y barra de herramientas ... 16 de 16
+  Comprobaciones automaticas que pasan ... 74 de 74
+  Capturas de referencia ................. 35
+
+MODULOS LISTOS (codigo | nombre | tabla principal):
+  hov | Hoja de Vida                  | HOJAVIDA_HOV
+  eml | Datos Laborales               | EMPLEADO_EML
+  che | Consulta Historico Empleado   | CAMBIOEMPLEADO_CEM
+  lic | Licencias y Suspensiones      | LIBROAUSENCIA_LIA
+  inc | Incapacidades y Reposos       | LIBROAUSENCIA_LIA
+  vac | Vacaciones                    | LIBROAUSENCIA_LIA
+  pco | Parametros Costeo             | CENTROCOSTO_CEC
+  vaf | Variables Fijas               | VARIABLEPERIOD_VAP
+  cem | Actos Cambios en el Empleado  | ACTOCAMBIOEMP_ACE
+  car | Cargos                        | CARGO_CAR
+  put | Planta de Personal            | PUESTOTRABAJO_PUT
+  org | Organigrama Funcional         | UNIDAD_UNI
+  bqn | Buscar Quincena               | PERIODO_PER
+  pla | Planta Activa                 | EMPLEADO_EML
+  rec | Comprobantes                  | NOMINA_NOM
+
+MODULOS PENDIENTES (12): cue, nqn, bpg, sue, liq, uti, pln, eva, fav, isl,
+ice, min.  Ver seccion 9 para el detalle y por que estan frenados.
+
+ADVERTENCIA IMPORTANTE SOBRE ESTA APLICACION:
+Nadie ha entrado nunca a la aplicacion con un usuario real. Toda la verificacion
+se hizo contra la base de datos y contra las capturas. Lo primero que deberias
+pedir es una credencial de prueba y recorrer las 15 pantallas a mano. Es muy
+probable que aparezcan fallos que ninguna verificacion automatica detecto.
+
+
+================================================================================
+4. ARQUITECTURA Y CONVENCIONES
+================================================================================
+
+Backend:  Node 20+ / Express / mssql / TypeScript (modulos NodeNext)
+Frontend: React 19 / Vite
+Empaque:  esbuild lo deja todo en un unico server.mjs
+Servidor: IIS con httpPlatformHandler
+
+ESTRUCTURA POR MODULO — respetala siempre:
+
+  src/modulos/<nombre>/repositorio.ts   Consultas SQL y tipos. Sin Express.
+  src/modulos/<nombre>/rutas.ts         Router de Express. Sin SQL.
+  src/web/paginas/<Nombre>.tsx          Pantalla React.
+  src/web/api.ts                        Cliente HTTP y tipos compartidos.
+  src/web/modulos.ts                    Registro de modulos (codigo, ruta, tabla).
+
+Para dar de alta un modulo hay que tocar cinco sitios:
+  1. src/modulos/<nombre>/repositorio.ts   (nuevo)
+  2. src/modulos/<nombre>/rutas.ts         (nuevo)
+  3. src/server.ts        — importar el router y hacer api.use('/ruta', router)
+  4. src/web/api.ts       — metodo del cliente y tipos
+  5. src/web/App.tsx      — rama para renderizar la pantalla
+  6. src/web/modulos.ts   — poner la ruta (deja de ser null)
+
+CONVENCIONES DE CODIGO — el cliente valora que se mantengan:
+
+  * TODO en espanol: nombres de variables, funciones, comentarios, textos.
+    Sin tildes ni enye en identificadores y comentarios de codigo (hubo
+    problemas de codificacion). En los textos que ve el usuario, si van.
+
+  * Los comentarios explican POR QUE, no QUE. Si un comentario solo repite lo
+    que hace la linea, sobra. Los buenos comentarios de este proyecto explican
+    una trampa del modelo de datos o una decision que no es obvia.
+
+  * Cuando un codigo no tiene catalogo en la base, se MUESTRA EL CODIGO EN
+    CRUDO. No inventes etiquetas. Solo se traduce cuando una captura prueba el
+    significado. Esto ya se aplico en CCEM_TIPO, CPUT_ESTADO, NACE_ESTADO,
+    CPER_GENERADA y las formas de pago.
+
+  * Toda consulta paginada necesita un ORDER BY determinista que incluya la
+    clave completa, o las paginas se solapan.
+
+  * Nada de librerias externas nuevas sin necesidad real: la red interna NO
+    tiene salida a Internet. Por eso los iconos son SVG embebidos en
+    src/web/Iconos.tsx y no una tipografia de iconos.
+
+
+================================================================================
+5. AUTENTICACION Y SEGURIDAD — NO LA DEBILITES
+================================================================================
+
+  * Login propio contra sys_users (MD5, herencia del directorio compartido) y
+    comprobacion de menu con sys_users_menu union sys_drop_down. Replica
+    check_access.php del sistema viejo.
+
+  * REQUIRED_MENU_ID=582 es el permiso que exige la aplicacion.
+
+  * El permiso se comprueba EN CADA PETICION, no se guarda en la sesion. Es
+    deliberado: si a alguien le revocan el acceso, deja de entrar de inmediato.
+    No lo "optimices" cacheandolo.
+
+  * Sesiones en archivo (SESSION_DIR), igual que SAR y Ficha_Medicos, para que
+    un reciclado de IIS no expulse a todos.
+
+  * Las variables de entorno DEBEN llevar prefijo RRHH_. IIS en este servidor
+    descarta las que se llaman DB_*. Ya costo una tarde averiguarlo.
+
+  * En la pantalla de Entidades Externas la referencia bancaria se muestra
+    enmascarada. La exportacion a CSV respeta esa misma casilla. Si agregas
+    exportaciones, no saques en claro lo que la pantalla oculta.
+
+RIESGO CONOCIDO Y NO RESUELTO:
+  La aplicacion se conecta a SQL Server con el usuario SARDB, que es SYSADMIN
+  del servidor. Es decir, la web corre como administrador total de las 14 bases.
+  Existe C:\Users\larriojas\rrhh-app\deploy\cuentas-minimas.sql preparado para
+  crear cuentas de minimo privilegio, pero NO se ha ejecutado: es decision del
+  cliente. Si te dan luz verde, ese es el guion.
+
+  Cuidado con una trampa que ya aparecio ahi: un DENY a nivel de ESQUEMA
+  prevalece sobre un GRANT a nivel de OBJETO. Un guion mal ordenado puede dejar
+  la aplicacion sin poder autenticar.
+
+
+================================================================================
+6. METODOLOGIA DE LAS CAPTURAS  (asi se ha trabajado y asi debes seguir)
+================================================================================
+
+Las 35 capturas de SARA v7.0 son la especificacion. Estan como imagenes
+incrustadas dentro de archivos .xlsx en:
+  C:\Users\larriojas\rrhh-app\pantallas\Pantallas\
+
+Para extraerlas (un .xlsx es un ZIP; las imagenes viven en xl/media/):
+
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $destino = 'C:\temp\img'
+  New-Item -ItemType Directory -Force -Path $destino | Out-Null
+  $n = 0
+  Get-ChildItem 'C:\Users\larriojas\rrhh-app\pantallas\Pantallas' -Filter *.xlsx |
+    Sort-Object Name | ForEach-Object {
+      $n++; $base = '{0:D2}' -f $n
+      $zip = [System.IO.Compression.ZipFile]::OpenRead($_.FullName)
+      $i = 0
+      foreach ($e in $zip.Entries) {
+        if ($e.FullName -like 'xl/media/*') {
+          $i++
+          [System.IO.Compression.ZipFileExtensions]::ExtractToFile(
+            $e, (Join-Path $destino "$base`_$i.png"), $true)
+        }
+      }
+      $zip.Dispose()
+    }
+
+REGLA DE ORO: ABRE LAS IMAGENES Y MIRALAS. No deduzcas su contenido por el
+nombre del archivo. En este proyecto se afirmo tres veces haber revisado las 35
+cuando en realidad se habian abierto 9, 25 y 30. Cada vez que se abrieron mas,
+aparecieron defectos reales. El cliente lo noto las tres veces.
+
+Cuando una funcionalidad de la captura difiera de lo que hoy hace la aplicacion,
+o de lo que el negocio necesita hoy, PREGUNTA al responsable antes de
+implementarla. El cliente dijo que avisara de las diferencias.
+
+ESTRUCTURA VISUAL QUE REPLICA LA APLICACION (sacada de las capturas):
+  - Barra de menu:  Herramienta | Ayuda
+  - Cinta de iconos grandes con rotulo que CAMBIA segun el subsistema
+    ("Administracion de Compensaciones", "Actos Administrativos"). En la captura
+    33 el rotulo dice "Planta de Personal" con otro juego de iconos.
+  - Salto rapido "Ir a:" por codigo de tres letras. El personal lleva anios
+    tecleando esos codigos: NO los cambies.
+  - Titulo de ventana con formato [codigo] Nombre del modulo
+  - Pestanas por pantalla
+  - Barra de estado abajo con institucion y contador de registros
+    ("Registro 1 a 25 de 2.808")
+
+Los codigos de tres letras no son arbitrarios: coinciden con el sufijo de la
+tabla. [hov] -> HOJAVIDA_HOV, [cem] -> CAMBIOEMPLEADO_CEM. Sirven de puente
+entre las pantallas viejas y la base migrada.
+
+
+================================================================================
+7. TRAMPAS DEL MODELO DE DATOS — LEE ESTO ANTES DE ESCRIBIR SQL
+================================================================================
+
+Esta seccion vale mas que el resto del documento. Son errores que ya se
+cometieron y costaron tiempo.
+
+7.1 CLAVES COMPUESTAS CON EMPRESA
+    Casi todos los catalogos de SARA6 tienen clave (codigo, empresa). El grupo
+    tiene 14 empresas y el mismo codigo significa cosas distintas en cada una.
+    Un JOIN que olvide la empresa MULTIPLICA las filas.
+    Ya paso con SUCURSAL_SUC: duplicaba cada empleado. Se arreglo con OUTER
+    APPLY y un desempate en el ORDER BY.
+    Excepciones: CENTROCOSTO_CEC tiene clave de TRES partes (zona, centro,
+    empresa) y EMPLEADO_EML es (identificacion, empresa).
+
+7.2 LAS FUNCIONES DEL CARGO NO CUELGAN DEL CARGO
+    FUNCIONPUESTRA_FPT tiene una columna CFPT_CARGO que parece el enlace
+    natural. VIENE EN BLANCO. El enlace real es:
+        CARGO -> UNIDADCARGO_UNC -> CUNC_PERFILFUNCION -> FUNCIONPUESTRA_FPT
+    Quien use CFPT_CARGO concluye que solo 2 cargos tienen funciones. Por el
+    perfil son 35. Lo mismo aplica a DIMENSIONCARGO_DIC (competencias, 36
+    cargos) y PERFILTABLAS_PET (requisitos, 35 cargos).
+    La suite de verificacion fija esos numeros a proposito: si alguien
+    "corrige" la consulta hacia CFPT_CARGO, las pestanas quedarian vacias sin
+    que fallara nada visible, y la verificacion lo caza.
+
+7.3 UN CARGO PUEDE TENER VARIOS PERFILES
+    Uno por cada unidad donde se usa. Por eso el enlace se resuelve con IN
+    sobre una subconsulta y NO con JOIN: un JOIN multiplicaria las funciones
+    por cada unidad que comparte perfil.
+
+7.4 ESQUEMA AUTODESCRIPTIVO EN LIQUIDACIONES
+    TIPOLIQUIDA_TIQ y TIPOSERVICIO_TIS guardan las ETIQUETAS DE COLUMNA de los
+    campos genericos VALOR1..N. Gracias a eso un solo modulo generico dibuja
+    correctamente 10 pantallas distintas (bono alimentacion, anticipos, IVSS,
+    pasivos de vacaciones...). No hagas una pantalla por tipo.
+
+7.5 REGLA DE NOMINA YA VERIFICADA — NO LA REINVENTES
+    En NOMINA_NOM, la columna CNOM_ORIGEN separa detalle de resultado:
+        'U' = devengo      -> linea del recibo
+        'V' = deduccion    -> linea del recibo
+        'W' = fila calculada por el sistema, NO es un concepto liquidado
+    El concepto 888 "ANTICIPO DE VACACION" es el caso claro: sumarlo como
+    deduccion deja el neto en cero, porque ES el neto ya calculado.
+
+7.6 CATALOGO EQUIVOCADO, FACIL DE CONFUNDIR
+    VINCULALABORAL_VIL = tipo de contrato (lo que se usa en datos laborales)
+    TIPOVINCULA_TIV    = relacion en la hoja de vida
+    No son intercambiables.
+
+7.7 CATALOGOS QUE SE UNEN POR ORGANIZACION, NO POR EMPRESA
+    CLASIFICACARGO_CLC, NIVELCARGO_NIC y CARGOGENERICO_CAG se unen por
+    N*_ORGANIZACION. Son compartidos por todo el grupo, a diferencia de los
+    catalogos de costeo.
+
+7.8 DECIMALES DE NOMINA
+    El FLOAT de Oracle NO es IEEE 754: es decimal exacto. En la migracion se
+    mapeo a DECIMAL(38,20), no a FLOAT de SQL Server, porque el binario
+    introduciria errores de redondeo que hoy no existen. Inaceptable en nomina.
+    Si creas columnas nuevas de dinero, sigue ese criterio.
+
+7.9 CAMPOS DESCRIPTIVOS DEL CARGO CASI VACIOS
+    CARGO_CAR tiene TCAR_OBJETIVO, TCAR_EXPINTERNA, TCAR_PROYECCION, etc. De
+    2.808 cargos, solo 1 tiene objetivo y 1 proyeccion, 0 tienen experiencia.
+    La pantalla los muestra igual, diciendo "Sin registrar en la base de
+    datos". Dato escaso no es dato ausente: no elimines la pantalla.
+
+
+================================================================================
+8. COMO SE CONSTRUYE, VERIFICA Y DESPLIEGA
+================================================================================
+
+8.1 COMANDOS
+
+    npm run dev            Desarrollo (API en 3020 + Vite en 5183)
+    npm run typecheck      Comprueba backend y frontend
+    npm run build          Compila frontend (public/) y backend
+    npm run build:bundle   Genera server.mjs con esbuild
+    npm run verificar      Suite de invariantes contra la base real
+
+8.2 DESPLIEGUE A PRODUCCION (secuencia completa)
+
+    cd C:\Users\larriojas\rrhh-app
+    npm run typecheck
+    npm run build
+    npm run build:bundle
+    node --check server.mjs          # que el bundle al menos parsee
+
+    $destino = '\\10.16.194.224\c$\inetpub\wwwroot\RRHH'
+    Copy-Item 'public\index.html' "$destino\public" -Force
+    Copy-Item 'public\assets\*'   "$destino\public\assets" -Force
+    Copy-Item 'server.mjs'        $destino -Force
+
+    # Limpiar bundles viejos: index.html nombra exactamente un .js y un .css.
+    $html = Get-Content "$destino\public\index.html" -Raw
+    $vig = [regex]::Matches($html,'assets/([A-Za-z0-9._-]+)') |
+           ForEach-Object { $_.Groups[1].Value }
+    Get-ChildItem "$destino\public\assets" |
+      Where-Object { $vig -notcontains $_.Name } |
+      Remove-Item -Force -Confirm:$false
+
+    # Reciclar IIS reescribiendo web.config byte a byte (no cambia el contenido,
+    # solo la fecha, que es lo que IIS vigila).
+    $wc = "$destino\web.config"
+    [System.IO.File]::WriteAllBytes($wc, [System.IO.File]::ReadAllBytes($wc))
+
+8.3 VERIFICAR SOBRE LO QUE SIRVE IIS, NO SOBRE EL BUILD LOCAL
+
+    Esto no es opcional. Una vez el build de vite fallo y se desplegaron assets
+    viejos sin que nadie lo notara. Comprueba siempre cadenas nuevas en el
+    bundle que devuelve el servidor:
+
+    $base = 'http://10.16.194.224/RRHH'
+    $h = Invoke-WebRequest "$base/" -UseBasicParsing
+    # sacar el nombre del asset de index.html y luego:
+    $js = (Invoke-WebRequest "$base/assets/<archivo>.js" -UseBasicParsing).Content
+    $js.Contains('un texto que acabas de agregar')   # debe dar True
+
+8.4 SUITE DE VERIFICACION
+
+    src/verificacion.ts — 74 comprobaciones. Nacio de tres clases de fallo que
+    ya ocurrieron en este proyecto:
+      1. Duplicados por unir catalogos sin la empresa.
+      2. Solapamiento entre paginas por ORDER BY no determinista.
+      3. Total declarado que no cuadra con las filas devueltas.
+
+    CUANDO AGREGUES UN MODULO PAGINADO, AGREGA SU BLOQUE AQUI. Es barato y ha
+    cazado defectos reales (por ejemplo, que CENTROCOSTO_CEC tiene clave de tres
+    partes y la paginacion no era determinista).
+
+8.5 UTILIDADES SQL
+
+    C:\Users\larriojas\rrhh-migracion\consulta.ps1
+        Consulta suelta contra SARA6 sin abrir SSMS.
+        .\consulta.ps1 -Sql "SELECT TOP 5 * FROM CARGO_CAR"
+        Ojo: solo muestra el PRIMER conjunto de resultados.
+
+    C:\Users\larriojas\rrhh-migracion\ejecutar-sql.ps1
+        Ejecuta un .sql partiendo los lotes por GO y PARANDO en el primer error.
+        Admite sustituciones para no dejar secretos en disco:
+        .\ejecutar-sql.ps1 -Archivo x.sql -Sustituir @{ '<CLAVE>' = $clave }
+
+
+================================================================================
+9. TRABAJO PENDIENTE, EN ORDEN SUGERIDO
+================================================================================
+
+PRIMERO (no cuesta casi nada y desbloquea todo lo demas):
+
+  [P0] Entrar a la aplicacion con un usuario real y recorrer las 15 pantallas.
+       Nunca se ha hecho. Pide credenciales al responsable.
+
+SEGUNDO (hay capturas, el modelo esta claro):
+
+  [P1] [vno] Novedad Vacaciones — captura 19 "Pantalla Detalle de vacaciones".
+       Es la unica pantalla con captura que sigue sin construirse.
+       Lleva panel de Periodos a la izquierda y pestanas Concepto / Variables /
+       Liquidacion Periodica, con pie de "Neto a pagar".
+       Ojo: [che] -> Vacacion ya muestra los registros de vacaciones, pero NO
+       el desglose por periodo con sus conceptos. Es otra pantalla.
+
+  [P2] [eml] tiene 5 de 7 pestanas. Faltan:
+         - Entidad Externa Multiples
+         - Distribucion Costeo
+
+  [P3] [cue] Cuenta Bancaria — hoy sin ruta. La captura 10 "Pantalla de Ingreso
+       cuenta bancaria" esta cubierta dentro de [eml] -> Entidades Externas,
+       asi que valora si hace falta como modulo aparte o basta con lo que hay.
+
+TERCERO (bloqueado, requiere decisiones del negocio):
+
+  Los 8-9 modulos de calculo de nomina: nqn (Nueva Quincena), bpg (Buscar Pago),
+  sue (Aumento de Sueldo), liq (Liquidacion), uti (Utilidades), pln
+  (Planificacion), eva (Evaluaciones), fav/isl/ice/min (parafiscales).
+
+  POR QUE ESTAN FRENADOS, y esto es importante que lo entiendas antes de
+  prometer fechas:
+    - NO existen capturas de esas pantallas.
+    - Sus formulas viven dentro del ejecutable viejo, NO en la base de datos.
+    - Escriben sobre nomina de PRODUCCION.
+  No las adivines. Hay que sentarse con el Coordinador de Nomina a levantar las
+  reglas antes de escribir una linea.
+
+CUARTO (decision pendiente del cliente):
+
+  Las pantallas de escritura: crear, modificar, borrar. En las capturas del
+  original esos botones salen atenuados casi siempre. La aplicacion actual es
+  SOLO DE CONSULTA. Convertirla en aplicacion de escritura es un cambio de
+  alcance que debe autorizar el cliente, no una tarea tecnica que se decide
+  sola.
+
+  Capturas que corresponden a pantallas de escritura y por eso no se hicieron:
+    07 "Generacion de vacaciones programadas"
+    14 "Programacion para pago de vacaciones"
+    13 el dialogo de Puesto de Trabajo con Guardar / Borrar / Reclasifica
+
+
+================================================================================
+10. ERRORES QUE YA SE COMETIERON — NO LOS REPITAS
+================================================================================
+
+10.1 BOM DE UTF-8 (el peor de todos)
+     En PowerShell 5.1, Set-Content -Encoding UTF8 y Out-File ESCRIBEN BOM.
+     Un BOM en package.json rompio el build de vite, y se desplegaron assets
+     viejos sin que nadie se diera cuenta. Hubo que limpiar 37 archivos.
+     Para escribir archivos sin BOM:
+       [System.IO.File]::WriteAllText($ruta, $texto,
+         (New-Object System.Text.UTF8Encoding $false))
+     Nota: -Encoding utf8NoBOM NO existe en PowerShell 5.1.
+
+10.2 SEPARADORES DE LOTE EN GUIONES SQL
+     GO no es T-SQL, lo interpreta el cliente. Un RETURN solo termina SU lote.
+     Si pones guardas de seguridad en un lote y la accion peligrosa en otro,
+     los guardas NO impiden que la accion se ejecute.
+
+10.3 DDL DE SERVIDOR QUE SE AUTOCONFIRMA
+     CREATE LOGIN se confirma solo y NO se deshace aunque falle una instruccion
+     posterior del mismo lote. Al crear cuentas, crealas DESHABILITADAS y
+     habilitalas al final, cuando ya esten todos los permisos puestos. Asi un
+     fallo a medias deja una cuenta inservible y no una permisiva.
+
+10.4 PERMISOS DE AMBITO SERVIDOR
+     DENY VIEW ANY DATABASE y demas permisos de servidor solo se pueden
+     ejecutar desde master. Desde otra base da error 5011.
+
+10.5 HAS_PERMS_BY_NAME
+     Con (NULL, NULL, 'permiso') consulta permisos de SERVIDOR. Para permisos de
+     BASE hay que usar (DB_NAME(), 'DATABASE', 'permiso'). Con la forma
+     equivocada devuelve NULL y parece que no hay permiso.
+
+10.6 PROXY DE VITE POR PREFIJO
+     La regla '/RRHH/api' capturaba tambien '/RRHH/api.ts', el propio modulo
+     del cliente, y la pagina quedaba en blanco con un 500 dificil de atribuir.
+     Ya esta corregido a la expresion regular '^/RRHH/api/'. No lo revuelvas.
+
+10.7 RUTAS DE API INEXISTENTES
+     Antes caian en el catch-all del SPA y devolvian index.html con 200: el
+     navegador recibia HTML donde esperaba JSON y el error salia como
+     "unexpected token <". Ya hay un 404 JSON antes del catch-all. Si agregas
+     rutas, respeta ese orden en src/server.ts.
+
+10.8 PARAMETROS DE POWERSHELL
+     -Db colisiona con el alias de -Debug. Cuidado al nombrar parametros.
+
+10.9 CONTEOS
+     No afirmes cobertura sin medirla. En este proyecto se dijo "22 modulos"
+     cuando la aplicacion reporta 15 de 27, y se dijo "9 de 9 pestanas" cuando
+     eran 8 de 9. El cliente lo detecto. Cuenta con un comando, no de memoria.
+
+
+================================================================================
+11. COMO QUIERE EL CLIENTE QUE SE TRABAJE
+================================================================================
+
+  * Despliega y verifica en el servidor, no solo en local.
+  * Cuando afirmes que algo esta hecho, que sea comprobable. Mejor "lo verifique
+    asi y esto salio" que "listo".
+  * Si un dato no se puede sostener con la base o con una captura, dilo en vez
+    de rellenarlo.
+  * El cliente lee con atencion y detecta las afirmaciones infladas. Ha corregido
+    varias veces. Prefiere una cifra incomoda y exacta.
+  * Reporta las diferencias que encuentres entre las capturas y lo que el negocio
+    necesita hoy; el cliente pidio expresamente que se le avisara de eso.
+
+
+================================================================================
+12. ARCHIVOS QUE CONVIENE LEER PRIMERO
+================================================================================
+
+  src/web/modulos.ts                      Mapa de todo el sistema
+  src/verificacion.ts                     Que se considera "correcto" aqui
+  src/modulos/cargos/repositorio.ts       Mejor ejemplo de trampa documentada
+  src/modulos/nomina/repositorio.ts       La regla de devengo/deduccion
+  src/modulos/catalogoMaestro/repositorio.ts   Patron de pantalla generica
+  src/web/BarraHerramientas.tsx           Exportar / copiar / imprimir
+  src/web/App.tsx                         Como se arma el marco de la aplicacion
+  deploy/web.config                       Configuracion de IIS y variables
+  deploy/crear-admin-sara6.sql            Ejemplo de guion SQL con guardas
+
+Detalle util: el CSV se exporta con separador ';' y BOM UTF-8 al inicio, porque
+Excel en configuracion regional espanola mete todo en una sola columna si se usa
+',' y corrompe las tildes sin el BOM. Es el UNICO sitio donde el BOM se pone a
+proposito.
+
+
+================================================================================
+FIN
+================================================================================

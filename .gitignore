@@ -1,0 +1,17 @@
+﻿# Dependencias
+node_modules/
+package-lock.json
+
+# Logs de IIS y procesos
+logs/
+*.log
+npm-debug.log*
+
+# Archivos de configuracion y credenciales
+.env
+.env.local
+Credenciales.txt
+
+# Backups y temporales
+*.bak
+*.tmp

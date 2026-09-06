@@ -1,10 +1,17 @@
 import express from 'express';
 import sql from 'mssql';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PUERTO = process.env.PORT_API || process.env.APP_PORT || 4000;
 
 app.use(express.json());
+app.use(express.static(__dirname));
+app.use('/RRHH', express.static(__dirname));
 
 const dbConfig = {
   user: process.env.DB_USER || process.env.RRHH_DB_USER || 'SARDB',

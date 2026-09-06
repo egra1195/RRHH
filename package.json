@@ -1,0 +1,26 @@
+{
+  "name": "rrhh",
+  "version": "1.0.0",
+  "description": "",
+  "main": "App.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egra1195/RRHH.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/egra1195/RRHH/issues"
+  },
+  "homepage": "https://github.com/egra1195/RRHH#readme",
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "express": "^5.2.1",
+    "mssql": "^12.7.0"
+  }
+}

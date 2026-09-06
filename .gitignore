@@ -1,4 +1,4 @@
-﻿# Dependencias
+# Dependencias
 node_modules/
 package-lock.json
 
@@ -15,3 +15,4 @@ Credenciales.txt
 # Backups y temporales
 *.bak
 *.tmp
+*.bundle.mjs
